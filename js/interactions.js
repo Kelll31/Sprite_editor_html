@@ -2,13 +2,22 @@
 // SPRITE EDITOR - INTERACTIONS MODULE
 // ==========================================
 
-import { interactiveState, customFramesData, appState, img, viewState } from './state.js';
+import { interactiveState, customFramesData, appState, img, viewState, frameNames } from './state.js';
 import { getFrameRect, forceRedraw } from './render.js';
 import { pushUndo } from './undo.js';
 import { saveToLocalStorage } from './storage.js';
 
 let shiftSelectStart = null;
 let shiftSelectEnd = null;
+
+// Pan state for spacebar navigation
+let panState = {
+    isPanning: false,
+    startX: 0,
+    startY: 0,
+    scrollLeft: 0,
+    scrollTop: 0
+};
 
 export function setupCanvasInteractions(fullCanvas) {
     const getMousePos = (e) => {
@@ -51,6 +60,9 @@ export function setupCanvasInteractions(fullCanvas) {
                 customFramesData[interactiveState.selectedFrameIndex] = { ...selRect };
             }
             interactiveState.origRect = { ...customFramesData[interactiveState.selectedFrameIndex] };
+            // Сохраняем старое состояние для undo
+            interactiveState.undoOldData = { ...customFramesData[interactiveState.selectedFrameIndex] };
+            interactiveState.undoOldNames = { ...frameNames };
         } else {
             const totalCells = appState.cols * appState.rows;
             for (let i = 0; i < totalCells; i++) {
@@ -86,6 +98,17 @@ export function setupCanvasInteractions(fullCanvas) {
         if (shiftSelectStart) {
             shiftSelectEnd = { x: mouse.x, y: mouse.y };
             forceRedraw();
+            return;
+        }
+
+        // Spacebar pan handling
+        if (panState.isPanning) {
+            const dx = e.clientX - panState.startX;
+            const dy = e.clientY - panState.startY;
+            const container = fullCanvas.parentElement;
+            container.scrollLeft = panState.scrollLeft - dx;
+            container.scrollTop = panState.scrollTop - dy;
+            fullCanvas.style.cursor = 'grabbing';
             return;
         }
 
@@ -146,6 +169,17 @@ export function setupCanvasInteractions(fullCanvas) {
             shiftSelectStart = null;
             shiftSelectEnd = null;
         }
+        
+        // Сохраняем undo для перемещения/изменения размера
+        if (interactiveState.isDragging && interactiveState.undoOldData) {
+            const index = interactiveState.selectedFrameIndex;
+            const newData = { ...customFramesData[index] };
+            pushUndo('drag', index, interactiveState.undoOldData, newData, interactiveState.undoOldNames, { ...frameNames });
+            interactiveState.undoOldData = null;
+            interactiveState.undoOldNames = null;
+            saveToLocalStorage();
+        }
+        
         interactiveState.isDragging = false;
         interactiveState.action = null;
     });
@@ -157,5 +191,52 @@ export function setupCanvasInteractions(fullCanvas) {
         viewState.zoom = Math.max(0.5, Math.min(5, viewState.zoom + delta));
         fullCanvas.style.transform = `scale(${viewState.zoom})`;
         fullCanvas.style.transformOrigin = 'center center';
+    });
+
+    // Spacebar pan - keydown
+    document.addEventListener('keydown', (e) => {
+        if (e.code === 'Space' && !e.repeat) {
+            panState.isPanning = true;
+            panState.startX = 0;
+            panState.startY = 0;
+            fullCanvas.style.cursor = 'grab';
+        }
+    });
+
+    // Spacebar pan - keyup
+    document.addEventListener('keyup', (e) => {
+        if (e.code === 'Space') {
+            panState.isPanning = false;
+            fullCanvas.style.cursor = 'crosshair';
+        }
+    });
+
+    // Mouse move for pan (on document to capture outside canvas)
+    document.addEventListener('mousemove', (e) => {
+        if (panState.isPanning) {
+            if (panState.startX === 0 && panState.startY === 0) {
+                panState.startX = e.clientX;
+                panState.startY = e.clientY;
+                const container = fullCanvas.parentElement;
+                panState.scrollLeft = container.scrollLeft;
+                panState.scrollTop = container.scrollTop;
+            }
+            const dx = e.clientX - panState.startX;
+            const dy = e.clientY - panState.startY;
+            const container = fullCanvas.parentElement;
+            container.scrollLeft = panState.scrollLeft - dx;
+            container.scrollTop = panState.scrollTop - dy;
+            fullCanvas.style.cursor = 'grabbing';
+        }
+    });
+
+    // Mouse up for pan
+    document.addEventListener('mouseup', () => {
+        if (panState.isPanning) {
+            panState.isPanning = false;
+            panState.startX = 0;
+            panState.startY = 0;
+            fullCanvas.style.cursor = 'crosshair';
+        }
     });
 }

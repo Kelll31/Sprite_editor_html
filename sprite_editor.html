@@ -18,6 +18,8 @@
             <input type="file" id="imageLoader" accept="image/png, image/jpeg, image/webp">
         </div>
 
+        <button class="btn" id="btnUndo" title="Ctrl+Z">↶ Отмена</button>
+        <button class="btn" id="btnRedo" title="Ctrl+Y">↷ Повтор</button>
         <button class="btn btn-action" id="btnExportJSON">📄 Скачать JSON</button>
         <button class="btn" id="btnImportJSON">📂 Импорт JSON</button>
     </div>
@@ -32,10 +34,6 @@
             <canvas id="animCanvas"></canvas>
 
             <div class="controls">
-                <div class="control-group">
-                    <label>Масштаб предпросмотра:</label>
-                    <input type="number" id="inpScale" value="2" min="1" max="10">
-                </div>
                 <div class="control-group">
                     <label>Играть кадры (индексы):</label>
                     <input type="text" id="inpFrames" value="0">
@@ -64,15 +62,27 @@
                 </div>
                 <div class="control-group" style="margin-top: 10px;">
                     <label style="font-size:12px;">🎨 Удалить фон:</label>
-                    <select id="inpBgColor" style="background:var(--bg-main);color:white;border:1px solid #6272a4;border-radius:4px;padding:3px;font-size:11px;">
-                        <option value="0,255,0">Зеленый (RGB)</option>
-                        <option value="0,0,255">Синий (RGB)</option>
-                        <option value="255,0,255">Маджента (RGB)</option>
-                        <option value="255,255,255">Белый</option>
-                        <option value="0,0,0">Черный</option>
-                    </select>
-                    <input type="number" id="inpTolerance" value="30" min="0" max="100" style="width:50px;" title="Допуск цвета">
-                    <button id="btnRemoveBg" class="btn btn-action" style="font-size:11px; padding:3px 8px;">Прим.</button>
+                    <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;width:100%;">
+                        <button id="btnColorPicker" class="btn" style="font-size:11px; padding:3px 8px;" title="Выбрать цвет с изображения">🎯 Пипетка</button>
+                        <select id="inpBgColor" style="background:var(--bg-main);color:white;border:1px solid #6272a4;border-radius:4px;padding:3px;font-size:11px;flex:1;min-width:120px;">
+                            <option value="0,255,0">Зеленый (RGB)</option>
+                            <option value="0,0,255">Синий (RGB)</option>
+                            <option value="255,0,255">Маджента (RGB)</option>
+                            <option value="255,255,255">Белый</option>
+                            <option value="0,0,0">Черный</option>
+                        </select>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;width:100%;margin-top:8px;">
+                        <label style="font-size:11px;min-width:70px;">Допуск:</label>
+                        <input type="range" id="inpToleranceRange" value="30" min="0" max="100" style="flex:1;" title="Допуск цвета">
+                        <input type="number" id="inpTolerance" value="30" min="0" max="100" style="width:50px;" title="Допуск цвета">
+                    </div>
+                    <canvas id="previewCanvas" style="width:100%;max-height:150px;border:2px solid #6272a4;border-radius:4px;margin-top:8px;display:none;"></canvas>
+                    <div style="display:flex;gap:5px;width:100%;margin-top:8px;">
+                        <button id="btnPreviewBg" class="btn btn-action" style="flex:1;font-size:11px; padding:5px;">👁️ Предпросмотр</button>
+                        <button id="btnApplyBg" class="btn btn-action" style="flex:1;font-size:11px; padding:5px;" disabled>✓ Применить</button>
+                        <button id="btnCancelBg" class="btn" style="flex:1;font-size:11px; padding:5px;" disabled>✕ Отмена</button>
+                    </div>
                 </div>
                 <div class="control-group" style="margin-top: 5px;">
                     <label style="display:flex;align-items:center;gap:5px;font-size:12px;">

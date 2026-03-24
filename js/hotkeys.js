@@ -2,28 +2,48 @@
 // SPRITE EDITOR - HOTKEYS MODULE
 // ==========================================
 
-import { interactiveState, customFramesData, img, animationState } from './state.js';
-import { undo, redo, pushUndo } from './undo.js';
+import { interactiveState, customFramesData, img, animationState, frameNames } from './state.js';
+import { undo, redo, pushUndo, getUndoLength, getRedoLength } from './undo.js';
 import { updateConfigFromInputs, forceRedraw } from './render.js';
 import { saveToLocalStorage } from './storage.js';
 
 export function setupHotkeys() {
     document.addEventListener('keydown', (e) => {
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-
+        // Разрешаем Ctrl+Z/Y в input и textarea только если это не отмена
+        const isInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA';
+        
+        // Ctrl+Z - Undo (работает везде)
         if (e.ctrlKey && e.key === 'z') {
             e.preventDefault();
-            undo();
-            forceRedraw();
+            if (undo()) {
+                forceRedraw();
+                // Обновляем список названий кадров если есть
+                const frameNamesListDiv = document.getElementById('frameNamesList');
+                if (frameNamesListDiv && window.renderFrameNames) {
+                    window.renderFrameNames();
+                }
+                saveToLocalStorage();
+            }
             return;
         }
 
+        // Ctrl+Y или Ctrl+Shift+Z - Redo (работает везде)
         if (e.ctrlKey && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) {
             e.preventDefault();
-            redo();
-            forceRedraw();
+            if (redo()) {
+                forceRedraw();
+                // Обновляем список названий кадров если есть
+                const frameNamesListDiv = document.getElementById('frameNamesList');
+                if (frameNamesListDiv && window.renderFrameNames) {
+                    window.renderFrameNames();
+                }
+                saveToLocalStorage();
+            }
             return;
         }
+        
+        // Остальные горячие клавиши только не в input
+        if (isInput) return;
 
         if (!interactiveState.isDragging && customFramesData[interactiveState.selectedFrameIndex]) {
             const rect = customFramesData[interactiveState.selectedFrameIndex];
@@ -60,10 +80,23 @@ export function setupHotkeys() {
             e.preventDefault();
             if (customFramesData[interactiveState.selectedFrameIndex]) {
                 const oldData = { ...customFramesData[interactiveState.selectedFrameIndex] };
-                pushUndo('delete', interactiveState.selectedFrameIndex, oldData, null);
-                delete customFramesData[interactiveState.selectedFrameIndex];
+                const oldNames = { ...frameNames };
+                const frameToDelete = interactiveState.selectedFrameIndex;
+                pushUndo('delete', frameToDelete, oldData, null, oldNames, { ...frameNames });
+                delete customFramesData[frameToDelete];
+                delete frameNames[frameToDelete];
+                
+                // Find next available frame
+                const remainingFrames = Object.keys(customFramesData).map(k => parseInt(k)).sort((a, b) => a - b);
+                if (remainingFrames.length > 0) {
+                    interactiveState.selectedFrameIndex = remainingFrames[0];
+                }
+                
                 forceRedraw();
                 saveToLocalStorage();
+                
+                // Update frame names list
+                if (window.renderFrameNames) window.renderFrameNames();
             }
             return;
         }
@@ -76,17 +109,19 @@ export function setupHotkeys() {
 
         if (e.key === '+' || e.key === '=') {
             e.preventDefault();
-            const scaleInput = document.getElementById('inpScale');
-            const newScale = Math.min(10, (parseInt(scaleInput.value) || 1) + 1);
-            scaleInput.value = newScale;
+            // Увеличение FPS
+            const fpsInput = document.getElementById('inpFPS');
+            const newFps = Math.min(60, (parseInt(fpsInput.value) || 10) + 1);
+            fpsInput.value = newFps;
             updateConfigFromInputs();
             return;
         }
         if (e.key === '-' || e.key === '_') {
             e.preventDefault();
-            const scaleInput = document.getElementById('inpScale');
-            const newScale = Math.max(1, (parseInt(scaleInput.value) || 1) - 1);
-            scaleInput.value = newScale;
+            // Уменьшение FPS
+            const fpsInput = document.getElementById('inpFPS');
+            const newFps = Math.max(1, (parseInt(fpsInput.value) || 10) - 1);
+            fpsInput.value = newFps;
             updateConfigFromInputs();
             return;
         }

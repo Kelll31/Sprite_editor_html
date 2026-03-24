@@ -7,7 +7,7 @@ import { setCanvasElements, forceRedraw, updateConfigFromInputs, renderInspector
 import { setupHotkeys } from './hotkeys.js';
 import { setupCanvasInteractions } from './interactions.js';
 import { startAutoSave, loadFromLocalStorage, saveToLocalStorage } from './storage.js';
-import { autoCrop, autoSlice, autoDetectGrid, removeBackground, autoSliceImproved } from './tools.js';
+import { autoCrop, autoSlice, autoDetectGrid, removeBackground, autoSliceImproved, previewRemoveBackground, pickColorFromCanvas } from './tools.js';
 
 let animCanvas, animCtx, fullCanvas, fullCtx, errorMsg, infoDiv;
 let animPresetsDiv, frameNamesListDiv;
@@ -26,7 +26,7 @@ function init() {
     setCanvasElements(animCanvas, fullCanvas, infoDiv);
 
     // Input listeners
-    ['inpCols', 'inpRows', 'inpScale', 'inpFrames', 'inpOffsets', 'inpFPS', 'inpPlayMode'].forEach(id => {
+    ['inpCols', 'inpRows', 'inpFrames', 'inpOffsets', 'inpFPS', 'inpPlayMode'].forEach(id => {
         document.getElementById(id).addEventListener('input', () => {
             animationState.frameIdx = 0;
             updateConfigFromInputs();
@@ -35,18 +35,183 @@ function init() {
 
     // Button listeners
     document.getElementById('imageLoader').addEventListener('change', handleImageUpload);
+    document.getElementById('btnUndo').addEventListener('click', () => {
+        import('./undo.js').then(({ undo }) => {
+            if (undo()) {
+                forceRedraw();
+                if (window.renderFrameNames) window.renderFrameNames();
+                saveToLocalStorage();
+            }
+        });
+    });
+    document.getElementById('btnRedo').addEventListener('click', () => {
+        import('./undo.js').then(({ redo }) => {
+            if (redo()) {
+                forceRedraw();
+                if (window.renderFrameNames) window.renderFrameNames();
+                saveToLocalStorage();
+            }
+        });
+    });
     document.getElementById('btnExportJSON').addEventListener('click', generateJSON);
     document.getElementById('btnImportJSON').addEventListener('click', importJSON);
     document.getElementById('btnResetCustom').addEventListener('click', () => {
+        const oldData = { ...customFramesData };
+        const oldNames = { ...frameNames };
         Object.keys(customFramesData).forEach(key => delete customFramesData[key]);
+        Object.keys(frameNames).forEach(key => delete frameNames[key]);
+        import('./undo.js').then(({ pushUndo }) => {
+            pushUndo('reset_all', -1, oldData, null, oldNames, null);
+        });
         forceRedraw();
     });
     document.getElementById('btnAddPreset').addEventListener('click', addPreset);
     document.getElementById('btnAutoCrop').addEventListener('click', autoCrop);
     document.getElementById('btnAutoSlice').addEventListener('click', autoSliceImproved);
     
-    // New button listeners
-    document.getElementById('btnRemoveBg').addEventListener('click', handleRemoveBackground);
+    // Background removal preview state
+    window.bgRemovalState = {
+        hasPreview: false,
+        previewCanvas: null,
+        originalImageData: null,
+        isPickingColor: false
+    };
+
+    // New button listeners for background removal with preview
+    const previewCanvas = document.getElementById('previewCanvas');
+    const btnPreviewBg = document.getElementById('btnPreviewBg');
+    const btnApplyBg = document.getElementById('btnApplyBg');
+    const btnCancelBg = document.getElementById('btnCancelBg');
+    const btnColorPicker = document.getElementById('btnColorPicker');
+    const toleranceRange = document.getElementById('inpToleranceRange');
+    const toleranceNumber = document.getElementById('inpTolerance');
+    const colorSelect = document.getElementById('inpBgColor');
+
+    // Sync tolerance slider and number input with LIVE preview
+    let previewTimeout = null;
+    
+    toleranceRange.addEventListener('input', (e) => {
+        toleranceNumber.value = e.target.value;
+        // Live preview - update immediately
+        if (img.complete && img.naturalWidth > 0) {
+            clearTimeout(previewTimeout);
+            previewTimeout = setTimeout(() => {
+                updatePreview();
+            }, 50);
+        }
+    });
+
+    toleranceNumber.addEventListener('input', (e) => {
+        toleranceRange.value = e.target.value;
+        // Live preview - update immediately
+        if (img.complete && img.naturalWidth > 0) {
+            clearTimeout(previewTimeout);
+            previewTimeout = setTimeout(() => {
+                updatePreview();
+            }, 50);
+        }
+    });
+    
+    // Also update preview when color changes
+    colorSelect.addEventListener('change', () => {
+        if (img.complete && img.naturalWidth > 0 && window.bgRemovalState.hasPreview) {
+            updatePreview();
+        }
+    });
+
+    // Color picker button
+    btnColorPicker.addEventListener('click', () => {
+        window.bgRemovalState.isPickingColor = !window.bgRemovalState.isPickingColor;
+        if (window.bgRemovalState.isPickingColor) {
+            btnColorPicker.style.backgroundColor = '#50fa7b';
+            btnColorPicker.style.color = '#282a36';
+            fullCanvas.style.cursor = 'crosshair';
+        } else {
+            btnColorPicker.style.backgroundColor = '';
+            btnColorPicker.style.color = '';
+            fullCanvas.style.cursor = 'crosshair';
+        }
+    });
+
+    // Click on full canvas to pick color
+    fullCanvas.addEventListener('click', (e) => {
+        if (window.bgRemovalState.isPickingColor) {
+            const colorInfo = pickColorFromCanvas(fullCanvas, e.clientX, e.clientY);
+            if (colorInfo) {
+                // Update color select to custom
+                const customOption = document.createElement('option');
+                customOption.value = colorInfo.rgb;
+                customOption.text = `Выбранный (${colorInfo.rgb})`;
+                customOption.selected = true;
+                
+                // Remove existing custom options
+                Array.from(colorSelect.options).forEach(opt => {
+                    if (opt.text.startsWith('Выбранный')) opt.remove();
+                });
+                colorSelect.add(customOption);
+                
+                window.bgRemovalState.isPickingColor = false;
+                btnColorPicker.style.backgroundColor = '';
+                btnColorPicker.style.color = '';
+                fullCanvas.style.cursor = 'crosshair';
+                
+                // Update preview if active
+                if (window.bgRemovalState.hasPreview) {
+                    updatePreview();
+                }
+            }
+        }
+    });
+
+    // Preview button
+    btnPreviewBg.addEventListener('click', updatePreview);
+
+    // Apply button
+    btnApplyBg.addEventListener('click', applyBackgroundRemoval);
+
+    // Cancel button
+    btnCancelBg.addEventListener('click', cancelBackgroundRemoval);
+
+    function updatePreview() {
+        if (!img.complete || img.naturalWidth === 0) return;
+        
+        const colorRgb = colorSelect.value.split(',').map(Number);
+        const tolerance = parseInt(toleranceRange.value) || 30;
+        
+        previewRemoveBackground(colorRgb, tolerance, previewCanvas);
+        
+        previewCanvas.style.display = 'block';
+        window.bgRemovalState.hasPreview = true;
+        btnApplyBg.disabled = false;
+        btnCancelBg.disabled = false;
+    }
+
+    function applyBackgroundRemoval() {
+        if (!window.bgRemovalState.hasPreview) return;
+        
+        const colorRgb = colorSelect.value.split(',').map(Number);
+        const tolerance = parseInt(toleranceRange.value) || 30;
+        
+        const newImg = removeBackground(colorRgb, tolerance);
+        if (newImg) {
+            newImg.onload = () => {
+                img.src = newImg.src;
+                img.onload = () => {
+                    forceRedraw();
+                    cancelBackgroundRemoval();
+                    saveToLocalStorage();
+                };
+            };
+        }
+    }
+
+    function cancelBackgroundRemoval() {
+        previewCanvas.style.display = 'none';
+        window.bgRemovalState.hasPreview = false;
+        btnApplyBg.disabled = true;
+        btnCancelBg.disabled = true;
+    }
+
     document.getElementById('chkShowGrid').addEventListener('change', (e) => {
         appState.gridVisible = e.target.checked;
         forceRedraw();
@@ -66,7 +231,6 @@ function init() {
             if (data.appState) {
                 document.getElementById('inpCols').value = data.appState.cols || 4;
                 document.getElementById('inpRows').value = data.appState.rows || 2;
-                document.getElementById('inpScale').value = data.appState.scale || 2;
                 document.getElementById('inpFPS').value = data.appState.fps || 10;
                 document.getElementById('inpPlayMode').value = data.appState.playMode || 'loop';
                 if (data.appState.activeFrames) {
@@ -94,23 +258,6 @@ function init() {
         import('./render.js').then(({ tick }) => tick(time));
         requestAnimationFrame(animate);
     });
-}
-
-function handleRemoveBackground() {
-    const colorSelect = document.getElementById('inpBgColor');
-    const toleranceInput = document.getElementById('inpTolerance');
-    
-    const colorRgb = colorSelect.value.split(',').map(Number);
-    const tolerance = parseInt(toleranceInput.value) || 30;
-    
-    const newImg = removeBackground(colorRgb, tolerance);
-    if (newImg) {
-        newImg.onload = () => {
-            img.src = newImg.src;
-            img.onload = forceRedraw;
-        };
-        alert(`Фон удален! Цвет: RGB(${colorRgb.join(',')}), Допуск: ${tolerance}`);
-    }
 }
 
 function handleImageUpload(e) {
@@ -217,11 +364,42 @@ function renderFrameNames() {
     if (!frameNamesListDiv) return;
     
     frameNamesListDiv.innerHTML = '';
-    const totalCells = appState.cols * appState.rows;
     
-    for (let i = 0; i < totalCells; i++) {
+    // Получаем все существующие кадры (только с customFramesData)
+    const frameIndices = Object.keys(customFramesData).map(k => parseInt(k)).sort((a, b) => a - b);
+    
+    if (frameIndices.length === 0) {
+        frameNamesListDiv.innerHTML = '<div style="color:#888;font-size:12px;text-align:center;padding:10px;">Нет кадров. Используйте Auto-Slice или создайте кадр через Shift+клик</div>';
+        return;
+    }
+    
+    for (const i of frameIndices) {
         const item = document.createElement('div');
         item.className = 'frame-name-item';
+        item.style.position = 'relative';
+        
+        // Кнопка удаления кадра (слева)
+        const deleteBtn = document.createElement('button');
+        deleteBtn.innerHTML = '🗑️';
+        deleteBtn.title = 'Удалить кадр';
+        deleteBtn.style.cssText = 'background:none;border:none;cursor:pointer;font-size:14px;opacity:0.7;padding:2px 5px;margin-right:5px;';
+        deleteBtn.onmouseover = () => deleteBtn.style.opacity = '1';
+        deleteBtn.onmouseout = () => deleteBtn.style.opacity = '0.7';
+        deleteBtn.onclick = (e) => {
+            e.stopPropagation();
+            if (confirm(`Удалить кадр #${i}?`)) {
+                const oldData = customFramesData[i] ? { ...customFramesData[i] } : null;
+                const oldNames = { ...frameNames };
+                delete customFramesData[i];
+                delete frameNames[i];
+                import('./undo.js').then(({ pushUndo }) => {
+                    pushUndo('delete_frame', i, oldData, null, oldNames, { ...frameNames });
+                });
+                import('./storage.js').then(({ saveToLocalStorage }) => saveToLocalStorage());
+                renderFrameNames();
+                forceRedraw();
+            }
+        };
         
         const idxSpan = document.createElement('span');
         idxSpan.className = 'frame-idx';
@@ -231,11 +409,30 @@ function renderFrameNames() {
         nameInput.type = 'text';
         nameInput.value = frameNames[i] || '';
         nameInput.placeholder = `Название кадра ${i}`;
+        
+        // При клике на input - выделяем соответствующий кадр
+        nameInput.addEventListener('click', () => {
+            interactiveState.selectedFrameIndex = i;
+            document.getElementById('inpFrames').value = i;
+            import('./render.js').then(({ updateConfigFromInputs, forceRedraw }) => {
+                forceRedraw();
+            });
+        });
+        
+        nameInput.addEventListener('focus', () => {
+            interactiveState.selectedFrameIndex = i;
+            document.getElementById('inpFrames').value = i;
+            import('./render.js').then(({ forceRedraw }) => {
+                forceRedraw();
+            });
+        });
+        
         nameInput.onchange = (e) => {
             frameNames[i] = e.target.value.trim();
             import('./storage.js').then(({ saveToLocalStorage }) => saveToLocalStorage());
         };
         
+        item.appendChild(deleteBtn);
         item.appendChild(idxSpan);
         item.appendChild(nameInput);
         frameNamesListDiv.appendChild(item);

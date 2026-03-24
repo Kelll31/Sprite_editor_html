@@ -40,7 +40,6 @@ export function updateConfigFromInputs() {
     const inputs = {
         cols: document.getElementById('inpCols'),
         rows: document.getElementById('inpRows'),
-        scale: document.getElementById('inpScale'),
         frames: document.getElementById('inpFrames'),
         offsets: document.getElementById('inpOffsets'),
         fps: document.getElementById('inpFPS'),
@@ -49,7 +48,6 @@ export function updateConfigFromInputs() {
 
     appState.cols = parseInt(inputs.cols.value) || 1;
     appState.rows = parseInt(inputs.rows.value) || 1;
-    appState.scale = parseFloat(inputs.scale.value) || 1;
     appState.fps = parseInt(inputs.fps.value) || 10;
     appState.playMode = inputs.playMode.value || 'loop';
 
@@ -95,17 +93,24 @@ export function tick(timestamp) {
         const finalW = Math.max(1, rect.w);
         const finalH = Math.max(1, rect.h);
 
-        animCanvas.width = finalW * appState.scale;
-        animCanvas.height = finalH * appState.scale;
+        // Автомасштабирование: вычисляем масштаб чтобы кадр поместился в панель
+        const maxCanvasWidth = 350;
+        const maxCanvasHeight = 300;
+        const scaleX = maxCanvasWidth / finalW;
+        const scaleY = maxCanvasHeight / finalH;
+        const autoScale = Math.min(scaleX, scaleY, 4); // Максимум 4x
+
+        animCanvas.width = finalW * autoScale;
+        animCanvas.height = finalH * autoScale;
         animCtx.imageSmoothingEnabled = false;
 
-        let renderOffsetX = appState.offsets.length > animationState.frameIdx ? appState.offsets[animationState.frameIdx] * appState.scale : 0;
+        let renderOffsetX = appState.offsets.length > animationState.frameIdx ? appState.offsets[animationState.frameIdx] * autoScale : 0;
 
         animCtx.clearRect(0, 0, animCanvas.width, animCanvas.height);
         animCtx.drawImage(
             img,
             rect.x, rect.y, finalW, finalH,
-            renderOffsetX, 0, finalW * appState.scale, finalH * appState.scale
+            renderOffsetX, 0, finalW * autoScale, finalH * autoScale
         );
 
         if (!interactiveState.isDragging && appState.activeFrames.length === 1) {
@@ -149,9 +154,15 @@ export function renderInspector() {
     const totalCells = cols * rows;
     const showGrid = appState.gridVisible !== undefined ? appState.gridVisible : true;
 
+    // Получаем только существующие кадры
+    const existingFrames = Object.keys(customFramesData).map(k => parseInt(k));
+
     // Отрисовка сетки только если включено
-    if (showGrid) {
+    if (showGrid && existingFrames.length > 0) {
         for (let i = 0; i < totalCells; i++) {
+            // Пропускаем пустые ячейки сетки если есть custom frames
+            if (existingFrames.length > 0 && !customFramesData[i]) continue;
+            
             const rect = getFrameRect(i);
             const isCustom = customFramesData[i] !== undefined;
             const isSelectedForEdit = i === interactiveState.selectedFrameIndex;
@@ -205,6 +216,47 @@ export function renderInspector() {
             }
         }
     }
+
+    // Отрисовка всех существующих кадров независимо от сетки
+    existingFrames.forEach(i => {
+        const rect = customFramesData[i];
+        const isSelectedForEdit = i === interactiveState.selectedFrameIndex;
+        const isInAnimation = appState.activeFrames.includes(i);
+
+        fullCtx.beginPath();
+        fullCtx.rect(rect.x, rect.y, rect.w, rect.h);
+
+        if (isSelectedForEdit) {
+            fullCtx.fillStyle = 'rgba(80, 250, 123, 0.3)';
+            fullCtx.fill();
+            fullCtx.strokeStyle = '#50fa7b';
+            fullCtx.lineWidth = 2;
+        } else if (isInAnimation) {
+            fullCtx.fillStyle = 'rgba(139, 233, 253, 0.15)';
+            fullCtx.fill();
+            fullCtx.strokeStyle = 'rgba(139, 233, 253, 0.8)';
+            fullCtx.lineWidth = 1;
+        } else {
+            fullCtx.strokeStyle = '#ff79c6';
+            fullCtx.lineWidth = 1;
+            fullCtx.setLineDash([4, 2]);
+        }
+
+        fullCtx.stroke();
+        fullCtx.setLineDash([]);
+
+        fullCtx.fillStyle = isSelectedForEdit ? '#50fa7b' : '#ff79c6';
+        fullCtx.font = 'bold 12px monospace';
+        fullCtx.fillText(i, rect.x + 4, rect.y + 14);
+
+        if (isSelectedForEdit) {
+            const handleSize = 6;
+            fullCtx.fillStyle = '#50fa7b';
+            fullCtx.fillRect(rect.x + rect.w - handleSize / 2, rect.y + rect.h - handleSize / 2, handleSize, handleSize);
+            fullCtx.fillRect(rect.x + rect.w - handleSize / 2, rect.y + rect.h / 2 - handleSize / 2, handleSize, handleSize);
+            fullCtx.fillRect(rect.x + rect.w / 2 - handleSize / 2, rect.y + rect.h - handleSize / 2, handleSize, handleSize);
+        }
+    });
 
     const selRect = getFrameRect(interactiveState.selectedFrameIndex);
     infoDiv.innerText = `Редактор (Кадр: [${interactiveState.selectedFrameIndex}]) | X: ${Math.round(selRect.x)}, Y: ${Math.round(selRect.y)}, W: ${Math.round(selRect.w)}, H: ${Math.round(selRect.h)}`;
