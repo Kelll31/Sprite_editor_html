@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Универсальный Спрайт-Редактор v5.0</title>
+    <style>
+        :root {
+            --bg-main: #1e1e2e;
+            --bg-panel: #282a36;
+            --accent: #f1c40f;
+            --accent-hover: #d4ac0d;
+            --text: #f8f8f2;
+            --grid-color: rgba(241, 196, 15, 0.4);
+            --highlight: rgba(255, 85, 85, 0.6);
+            --handle: #50fa7b;
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 {
+            margin-top: 0;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--accent);
+            text-align: center;
+            font-size: 24px;
+        }
+
+        .top-controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+            background: var(--bg-panel);
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 1300px;
+            box-sizing: border-box;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            font-size: 14px;
+            cursor: pointer;
+            border: 2px solid var(--accent);
+            border-radius: 8px;
+            background-color: transparent;
+            color: var(--accent);
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            background-color: var(--accent);
+            color: var(--bg-main);
+        }
+
+        .btn-action {
+            background-color: #50fa7b;
+            color: #282a36;
+            border-color: #50fa7b;
+        }
+
+        .btn-action:hover {
+            background-color: #40c963;
+        }
+
+        .file-upload {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+        }
+
+        .file-upload input[type=file] {
+            position: absolute;
+            font-size: 100px;
+            opacity: 0;
+            right: 0;
+            top: 0;
+            cursor: pointer;
+        }
+
+        .dashboard {
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+            justify-content: center;
+            width: 100%;
+            max-width: 1300px;
+        }
+
+        .panel {
+            background-color: var(--bg-panel);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .animator-panel {
+            flex: 1;
+            min-width: 380px;
+        }
+
+        .inspector-panel {
+            flex: 2;
+            min-width: 500px;
+            overflow-x: auto;
+            position: relative;
+        }
+
+        h3 {
+            margin-top: 0;
+            border-bottom: 2px solid var(--accent);
+            padding-bottom: 5px;
+            width: 100%;
+            text-align: center;
+        }
+
+        h4 {
+            margin: 15px 0 5px 0;
+            color: #bd93f9;
+            width: 100%;
+            text-align: left;
+            font-size: 14px;
+            border-bottom: 1px solid #444;
+            padding-bottom: 5px;
+        }
+
+        canvas {
+            background-color: #555;
+            background-image: linear-gradient(45deg, #444 25%, transparent 25%), linear-gradient(-45deg, #444 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #444 75%), linear-gradient(-45deg, transparent 75%, #444 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            border-radius: 4px;
+            image-rendering: pixelated;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            margin: 10px 0;
+        }
+
+        #animCanvas {
+            border: 4px solid var(--accent);
+        }
+
+        #fullSheetCanvas {
+            border: 2px solid #6272a4;
+            max-width: 100%;
+            cursor: crosshair;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            width: 100%;
+        }
+
+        label {
+            font-size: 13px;
+            font-weight: bold;
+            color: #ccc;
+        }
+
+        input {
+            background: var(--bg-main);
+            border: 1px solid #6272a4;
+            color: white;
+            padding: 5px 8px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        input:focus {
+            border-color: var(--accent);
+            outline: none;
+        }
+
+        input[type="number"] {
+            width: 50px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+        }
+
+        .anim-buttons {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+            justify-content: flex-start;
+            width: 100%;
+        }
+
+        .preset-badge {
+            background: #6272a4;
+            color: white;
+            border: none;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: 0.2s;
+        }
+
+        .preset-badge span {
+            cursor: pointer;
+        }
+
+        .preset-badge span:hover {
+            color: var(--accent);
+        }
+
+        .preset-badge .del-btn {
+            color: #ff5555;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .preset-badge .del-btn:hover {
+            color: #ff0000;
+        }
+
+        .active-preset {
+            background: #ff79c6 !important;
+            color: white;
+        }
+
+        .error {
+            color: #ff5555;
+            background: #440000;
+            padding: 10px;
+            border-radius: 5px;
+            display: none;
+            margin-top: 10px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .hint {
+            font-size: 12px;
+            color: #8be9fd;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .preset-creator {
+            background: #1e1e2e;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px dashed #6272a4;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>🔧 Универсальный Спрайт-Редактор</h1>
+
+    <div class="top-controls">
+        <div class="file-upload btn">
+            <span>📁 Загрузить картинку (Sprite Sheet)</span>
+            <input type="file" id="imageLoader" accept="image/png, image/jpeg, image/webp">
+        </div>
+
+        <button class="btn btn-action" id="btnExportJSON">📄 Скачать JSON</button>
+    </div>
+
+    <div id="errorMsg" class="error">Ошибка загрузки.</div>
+
+    <div class="dashboard">
+
+        <!-- ЛЕВАЯ ПАНЕЛЬ: Аниматор -->
+        <div class="panel animator-panel">
+            <h3>Текущий кадр / Анимация</h3>
+            <canvas id="animCanvas"></canvas>
+
+            <div class="controls">
+                <div class="control-group">
+                    <label>Масштаб предпросмотра:</label>
+                    <input type="number" id="inpScale" value="2" min="1" max="10">
+                </div>
+                <div class="control-group">
+                    <label>Играть кадры (индексы):</label>
+                    <input type="text" id="inpFrames" value="0">
+                </div>
+                <div class="control-group">
+                    <label title="Укажи смещения через запятую для каждого кадра анимации">Фикс дрифта X:</label>
+                    <input type="text" id="inpOffsets" value="" placeholder="Напр. 0,2,4">
+                </div>
+                <div class="control-group" style="margin-top: 10px;">
+                    <button id="btnResetCustom" class="btn" style="width:100%; font-size:12px; padding:5px;">Сбросить
+                        ручные изменения кадров</button>
+                </div>
+
+                <div class="preset-creator">
+                    <h4 style="margin-top:0;">Менеджер Анимаций (Пресеты)</h4>
+                    <div class="control-group">
+                        <input type="text" id="inpPresetName" placeholder="Имя (напр. Run)" style="flex: 1;">
+                        <input type="text" id="inpPresetFrames" placeholder="Кадры (0,1,2)" style="flex: 1;">
+                        <button id="btnAddPreset" class="btn btn-action"
+                            style="padding: 5px 12px; font-size: 16px; line-height: 1;">+</button>
+                    </div>
+                    <div class="anim-buttons" id="animPresets"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ПРАВАЯ ПАНЕЛЬ: Инспектор (Сетка) -->
+        <div class="panel inspector-panel">
+            <h3>Инспектор Спрайт-листа</h3>
+            <div class="hint">Кликни на кадр: Редактировать | Ctrl+Клик: Добавить в анимацию | Тащи за центр: Двигать |
+                Тащи за угол: Менять размер</div>
+
+            <div class="control-group"
+                style="margin-bottom: 10px; justify-content: center; background: #1e1e2e; padding: 10px; border-radius: 8px; width: auto;">
+                <label>Колонок в сетке:</label>
+                <input type="number" id="inpCols" value="4" min="1">
+                <label style="margin-left:15px;">Строк в сетке:</label>
+                <input type="number" id="inpRows" value="2" min="1">
+            </div>
+
+            <canvas id="fullSheetCanvas"></canvas>
+
+            <div id="selectedFrameInfo" style="margin-top:10px; font-family:monospace; color:#50fa7b; font-size: 14px;">
+                Кадр: - | X: 0, Y: 0, W: 0, H: 0
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- ГЛОБАЛЬНОЕ СОСТОЯНИЕ РЕДАКТОРА ---
+        let appState = {
+            cols: 4,
+            rows: 2,
+            scale: 3,
+            activeFrames: [0],
+            offsets: []
+        };
+
+        let customAnimations = {}; // Формат: { "Имя": [0, 1, 2] }
+        let customFramesData = {}; // Формат: { frameIndex: {x, y, w, h} }
+
+        let img = new Image();
+        let frameIdx = 0;
+        let loopTimer = null;
+        let fileNameForJSON = "spritesheet.png";
+
+        let interactiveState = {
+            selectedFrameIndex: 0,
+            isDragging: false,
+            action: null, // 'move', 'resize_br', 'resize_r', 'resize_b'
+            startX: 0,
+            startY: 0,
+            origRect: null
+        };
+
+        // DOM элементы
+        const animCanvas = document.getElementById('animCanvas'), animCtx = animCanvas.getContext('2d');
+        const fullCanvas = document.getElementById('fullSheetCanvas'), fullCtx = fullCanvas.getContext('2d');
+        const errorMsg = document.getElementById('errorMsg');
+        const infoDiv = document.getElementById('selectedFrameInfo');
+
+        // Инпуты
+        const inputs = {
+            cols: document.getElementById('inpCols'),
+            rows: document.getElementById('inpRows'),
+            scale: document.getElementById('inpScale'),
+            frames: document.getElementById('inpFrames'),
+            offsets: document.getElementById('inpOffsets')
+        };
+        const animPresetsDiv = document.getElementById('animPresets');
+
+        // --- ИНИЦИАЛИЗАЦИЯ ---
+        function init() {
+            // Слушатели инпутов
+            Object.values(inputs).forEach(inp => {
+                inp.addEventListener('input', () => {
+                    frameIdx = 0;
+                    updateConfigFromInputs();
+                });
+            });
+
+            // Загрузка картинки юзером
+            document.getElementById('imageLoader').addEventListener('change', handleImageUpload);
+            // Экспорт JSON
+            document.getElementById('btnExportJSON').addEventListener('click', generateJSON);
+            // Сброс кастомных рамок
+            document.getElementById('btnResetCustom').addEventListener('click', () => {
+                customFramesData = {};
+                forceRedraw();
+            });
+            // Добавление пресета
+            document.getElementById('btnAddPreset').addEventListener('click', addPreset);
+
+            setupCanvasInteractions();
+            createPlaceholderImage();
+
+            updateConfigFromInputs();
+            if (!loopTimer) loopTimer = setInterval(tick, 150);
+        }
+
+        // --- ЛОГИКА КАДРОВ ---
+        function getBaseGridRect(index) {
+            const cols = appState.cols || 1;
+            const rows = appState.rows || 1;
+            const baseW = img.width / cols;
+            const baseH = img.height / rows;
+            const col = index % cols;
+            const row = Math.floor(index / cols);
+            return {
+                x: col * baseW,
+                y: row * baseH,
+                w: baseW,
+                h: baseH
+            };
+        }
+
+        // Получить итоговый прямоугольник (кастомный или из сетки)
+        function getFrameRect(index) {
+            if (customFramesData[index]) {
+                return customFramesData[index];
+            }
+            return getBaseGridRect(index);
+        }
+
+        function updateConfigFromInputs() {
+            appState.cols = parseInt(inputs.cols.value) || 1;
+            appState.rows = parseInt(inputs.rows.value) || 1;
+            appState.scale = parseFloat(inputs.scale.value) || 1;
+
+            const parseArr = (val) => val.split(',').map(n => parseFloat(n.trim())).filter(n => !isNaN(n));
+            appState.activeFrames = parseArr(inputs.frames.value);
+            if (appState.activeFrames.length === 0) appState.activeFrames = [0];
+            appState.offsets = parseArr(inputs.offsets.value);
+
+            // Если выбранный кадр не в списке активных, обновляем его
+            if (!appState.activeFrames.includes(interactiveState.selectedFrameIndex)) {
+                // Оставляем выбор кадра для редактирования независимым от анимации
+            }
+
+            forceRedraw();
+        }
+
+        function handleImageUpload(e) {
+            const reader = new FileReader();
+            reader.onload = function (event) {
+                img = new Image();
+                img.onload = () => {
+                    customFramesData = {};
+                    customAnimations = {}; // Очищаем старые пресеты для новой картинки
+                    renderPresets();
+                    fileNameForJSON = e.target.files[0].name;
+                    inputs.frames.value = "0"; // Сбрасываем на первый кадр
+                    updateConfigFromInputs();
+                    forceRedraw();
+                };
+                img.src = event.target.result;
+            }
+            if (e.target.files[0]) {
+                reader.readAsDataURL(e.target.files[0]);
+            }
+        }
+
+        function createPlaceholderImage() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 400; canvas.height = 200;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#ff79c6'; ctx.fillRect(0, 0, 400, 200);
+
+            // Рисуем фейковую сетку 4х2 для заглушки
+            ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+            ctx.strokeRect(0, 0, 400, 200);
+            ctx.beginPath(); ctx.moveTo(100, 0); ctx.lineTo(100, 200); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(200, 0); ctx.lineTo(200, 200); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(300, 0); ctx.lineTo(300, 200); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0, 100); ctx.lineTo(400, 100); ctx.stroke();
+
+            ctx.fillStyle = '#282a36'; ctx.font = 'bold 24px sans-serif';
+            ctx.fillText('ЗАГРУЗИ', 150, 80);
+            ctx.fillText('КАРТИНКУ 📁', 125, 130);
+            img.src = canvas.toDataURL();
+            img.onload = forceRedraw;
+        }
+
+        function forceRedraw() {
+            tick();
+        }
+
+        // --- ПРЕСЕТЫ (АНИМАЦИИ) ---
+        function addPreset() {
+            const nameInp = document.getElementById('inpPresetName');
+            const framesInp = document.getElementById('inpPresetFrames');
+            const name = nameInp.value.trim();
+            const framesStr = framesInp.value.trim();
+
+            if (!name || !framesStr) return; // Игнорируем если пусто
+
+            const framesArr = framesStr.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n));
+            if (framesArr.length === 0) return;
+
+            customAnimations[name] = framesArr;
+            renderPresets();
+            nameInp.value = '';
+            framesInp.value = '';
+        }
+
+        function renderPresets() {
+            animPresetsDiv.innerHTML = '';
+            for (let presetName in customAnimations) {
+                const badge = document.createElement('div');
+                badge.className = 'preset-badge';
+
+                const spanName = document.createElement('span');
+                spanName.innerText = presetName;
+                spanName.onclick = () => {
+                    // Убираем активный класс у всех, ставим текущему
+                    document.querySelectorAll('.preset-badge').forEach(b => b.classList.remove('active-preset'));
+                    badge.classList.add('active-preset');
+
+                    inputs.frames.value = customAnimations[presetName].join(',');
+                    updateConfigFromInputs();
+                };
+
+                const delBtn = document.createElement('div');
+                delBtn.className = 'del-btn';
+                delBtn.innerText = '✖';
+                delBtn.title = 'Удалить пресет';
+                delBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    delete customAnimations[presetName];
+                    renderPresets();
+                };
+
+                badge.appendChild(spanName);
+                badge.appendChild(delBtn);
+                animPresetsDiv.appendChild(badge);
+            }
+        }
+
+        // --- ГЛАВНЫЙ ЦИКЛ РЕНДЕРА ---
+        function tick() {
+            if (!img.complete || img.naturalWidth === 0) return;
+
+            // 1. РЕНДЕР АНИМАЦИИ (ЛЕВЫЙ ХОЛСТ)
+            if (appState.activeFrames.length > 0) {
+                if (frameIdx >= appState.activeFrames.length) frameIdx = 0;
+                const animFrameIndex = appState.activeFrames[frameIdx];
+                const rect = getFrameRect(animFrameIndex);
+
+                // Защита от нулевых размеров
+                const finalW = Math.max(1, rect.w);
+                const finalH = Math.max(1, rect.h);
+
+                animCanvas.width = finalW * appState.scale;
+                animCanvas.height = finalH * appState.scale;
+                animCtx.imageSmoothingEnabled = false;
+
+                let renderOffsetX = appState.offsets.length > frameIdx ? appState.offsets[frameIdx] * appState.scale : 0;
+
+                animCtx.clearRect(0, 0, animCanvas.width, animCanvas.height);
+                animCtx.drawImage(
+                    img,
+                    rect.x, rect.y, finalW, finalH,
+                    renderOffsetX, 0, finalW * appState.scale, finalH * appState.scale
+                );
+
+                if (!interactiveState.isDragging && appState.activeFrames.length === 1) {
+                    // Авто-фокус инспектора на кадре, если мы смотрим 1 статический кадр
+                    interactiveState.selectedFrameIndex = animFrameIndex;
+                }
+            }
+
+            // 2. РЕНДЕР ИНСПЕКТОРА (ПРАВЫЙ ХОЛСТ)
+            fullCanvas.width = img.width;
+            fullCanvas.height = img.height;
+            fullCtx.imageSmoothingEnabled = false;
+            fullCtx.clearRect(0, 0, fullCanvas.width, fullCanvas.height);
+            fullCtx.globalAlpha = 0.8;
+            fullCtx.drawImage(img, 0, 0);
+            fullCtx.globalAlpha = 1.0;
+
+            const cols = appState.cols;
+            const rows = appState.rows;
+            const totalCells = cols * rows;
+
+            // Отрисовка всех рамок
+            for (let i = 0; i < totalCells; i++) {
+                const rect = getFrameRect(i);
+                const isCustom = customFramesData[i] !== undefined;
+                const isSelectedForEdit = i === interactiveState.selectedFrameIndex;
+                const isInAnimation = appState.activeFrames.includes(i);
+
+                fullCtx.beginPath();
+                fullCtx.rect(rect.x, rect.y, rect.w, rect.h);
+
+                if (isSelectedForEdit) {
+                    // Выбранный кадр (активный для редактирования)
+                    fullCtx.fillStyle = 'rgba(80, 250, 123, 0.3)';
+                    fullCtx.fill();
+                    fullCtx.strokeStyle = '#50fa7b';
+                    fullCtx.lineWidth = 2;
+                } else if (isInAnimation) {
+                    // Кадры, участвующие в анимации (добавленные через Ctrl)
+                    fullCtx.fillStyle = 'rgba(139, 233, 253, 0.15)'; // Голубовато-бирюзовый
+                    fullCtx.fill();
+                    fullCtx.strokeStyle = 'rgba(139, 233, 253, 0.8)';
+                    fullCtx.lineWidth = 1;
+                } else if (isCustom) {
+                    // Кастомно измененные рамки (розовый пунктир)
+                    fullCtx.strokeStyle = '#ff79c6';
+                    fullCtx.lineWidth = 1;
+                    fullCtx.setLineDash([4, 2]);
+                } else {
+                    // Стандартная сетка
+                    fullCtx.strokeStyle = 'rgba(241, 196, 15, 0.3)';
+                    fullCtx.lineWidth = 1;
+                    fullCtx.setLineDash([]);
+                }
+
+                fullCtx.stroke();
+                fullCtx.setLineDash([]);
+
+                // Цвет номера кадра
+                if (isSelectedForEdit) {
+                    fullCtx.fillStyle = '#50fa7b';
+                } else if (isInAnimation) {
+                    fullCtx.fillStyle = '#8be9fd';
+                } else if (isCustom) {
+                    fullCtx.fillStyle = '#ff79c6';
+                } else {
+                    fullCtx.fillStyle = '#fff';
+                }
+
+                fullCtx.font = 'bold 12px monospace';
+                fullCtx.fillText(i, rect.x + 4, rect.y + 14);
+
+                // Отрисовка ручек (handles) для выбранного кадра
+                if (isSelectedForEdit) {
+                    const handleSize = 6;
+                    fullCtx.fillStyle = '#50fa7b';
+                    fullCtx.fillRect(rect.x + rect.w - handleSize / 2, rect.y + rect.h - handleSize / 2, handleSize, handleSize);
+                    fullCtx.fillRect(rect.x + rect.w - handleSize / 2, rect.y + rect.h / 2 - handleSize / 2, handleSize, handleSize);
+                    fullCtx.fillRect(rect.x + rect.w / 2 - handleSize / 2, rect.y + rect.h - handleSize / 2, handleSize, handleSize);
+                }
+            }
+
+            // Обновляем текст под холстом
+            const selRect = getFrameRect(interactiveState.selectedFrameIndex);
+            infoDiv.innerText = `Редактор (Кадр: [${interactiveState.selectedFrameIndex}]) | X: ${Math.round(selRect.x)}, Y: ${Math.round(selRect.y)}, W: ${Math.round(selRect.w)}, H: ${Math.round(selRect.h)}`;
+
+            frameIdx++;
+        }
+
+        // --- ИНТЕРАКТИВНОСТЬ ХОЛСТА (DRAG & DROP И КЛИКИ) ---
+        function setupCanvasInteractions() {
+            const getMousePos = (e) => {
+                const rect = fullCanvas.getBoundingClientRect();
+                const scaleX = fullCanvas.width / rect.width;
+                const scaleY = fullCanvas.height / rect.height;
+                return {
+                    x: (e.clientX - rect.left) * scaleX,
+                    y: (e.clientY - rect.top) * scaleY
+                };
+            };
+
+            const checkHandleZone = (mx, my, rect) => {
+                const hs = 8;
+                if (Math.abs(mx - (rect.x + rect.w)) < hs && Math.abs(my - (rect.y + rect.h)) < hs) return 'resize_br';
+                if (Math.abs(mx - (rect.x + rect.w)) < hs && my > rect.y && my < rect.y + rect.h) return 'resize_r';
+                if (Math.abs(my - (rect.y + rect.h)) < hs && mx > rect.x && mx < rect.x + rect.w) return 'resize_b';
+                if (mx > rect.x && mx < rect.x + rect.w && my > rect.y && my < rect.y + rect.h) return 'move';
+                return null;
+            };
+
+            fullCanvas.addEventListener('mousedown', (e) => {
+                const mouse = getMousePos(e);
+
+                const selRect = getFrameRect(interactiveState.selectedFrameIndex);
+                const action = checkHandleZone(mouse.x, mouse.y, selRect);
+
+                if (action && !e.ctrlKey && !e.metaKey) {
+                    // Тащим текущий выделенный кадр (только если не зажат Ctrl)
+                    interactiveState.isDragging = true;
+                    interactiveState.action = action;
+                    interactiveState.startX = mouse.x;
+                    interactiveState.startY = mouse.y;
+                    if (!customFramesData[interactiveState.selectedFrameIndex]) {
+                        customFramesData[interactiveState.selectedFrameIndex] = { ...selRect };
+                    }
+                    interactiveState.origRect = { ...customFramesData[interactiveState.selectedFrameIndex] };
+                } else {
+                    // Кликнули мимо ручек (или зажат Ctrl) - ВЫДЕЛЯЕМ КАДР(Ы)
+                    const totalCells = appState.cols * appState.rows;
+                    for (let i = 0; i < totalCells; i++) {
+                        const r = getFrameRect(i);
+                        if (mouse.x > r.x && mouse.x < r.x + r.w && mouse.y > r.y && mouse.y < r.y + r.h) {
+
+                            interactiveState.selectedFrameIndex = i; // Делаем его активным для редактирования
+
+                            if (e.ctrlKey || e.metaKey) {
+                                // РЕЖИМ МУЛЬТИВЫДЕЛЕНИЯ ДЛЯ АНИМАЦИИ (Ctrl+Click)
+                                let currentFrames = [...appState.activeFrames];
+
+                                if (currentFrames.includes(i)) {
+                                    // Если кадр уже есть - удаляем (но оставляем хотя бы 1)
+                                    if (currentFrames.length > 1) {
+                                        currentFrames = currentFrames.filter(frame => frame !== i);
+                                    }
+                                } else {
+                                    // Если нет - добавляем в конец анимации
+                                    currentFrames.push(i);
+                                }
+                                inputs.frames.value = currentFrames.join(',');
+                            } else {
+                                // ОБЫЧНЫЙ КЛИК - сбрасываем анимацию до 1 кадра
+                                inputs.frames.value = i;
+                            }
+
+                            // Сбрасываем активные пресеты
+                            document.querySelectorAll('.preset-badge').forEach(b => b.classList.remove('active-preset'));
+
+                            updateConfigFromInputs();
+                            return;
+                        }
+                    }
+                }
+            });
+
+            fullCanvas.addEventListener('mousemove', (e) => {
+                const mouse = getMousePos(e);
+
+                if (!interactiveState.isDragging) {
+                    const selRect = getFrameRect(interactiveState.selectedFrameIndex);
+                    const hoverAction = checkHandleZone(mouse.x, mouse.y, selRect);
+                    if (hoverAction === 'resize_br') fullCanvas.style.cursor = 'nwse-resize';
+                    else if (hoverAction === 'resize_r') fullCanvas.style.cursor = 'ew-resize';
+                    else if (hoverAction === 'resize_b') fullCanvas.style.cursor = 'ns-resize';
+                    else if (hoverAction === 'move') fullCanvas.style.cursor = 'move';
+                    else fullCanvas.style.cursor = 'crosshair';
+                    return;
+                }
+
+                const dx = mouse.x - interactiveState.startX;
+                const dy = mouse.y - interactiveState.startY;
+                const targetRect = customFramesData[interactiveState.selectedFrameIndex];
+                const orig = interactiveState.origRect;
+
+                if (interactiveState.action === 'move') {
+                    targetRect.x = orig.x + dx;
+                    targetRect.y = orig.y + dy;
+                } else if (interactiveState.action === 'resize_br') {
+                    targetRect.w = Math.max(1, orig.w + dx);
+                    targetRect.h = Math.max(1, orig.h + dy);
+                } else if (interactiveState.action === 'resize_r') {
+                    targetRect.w = Math.max(1, orig.w + dx);
+                } else if (interactiveState.action === 'resize_b') {
+                    targetRect.h = Math.max(1, orig.h + dy);
+                }
+
+                forceRedraw();
+            });
+
+            window.addEventListener('mouseup', () => {
+                interactiveState.isDragging = false;
+                interactiveState.action = null;
+            });
+        }
+
+        // --- ГЕНЕРАЦИЯ JSON ---
+        function generateJSON() {
+            const totalCells = appState.cols * appState.rows;
+            const framesData = {};
+
+            // Собираем данные всех кадров
+            for (let i = 0; i < totalCells; i++) {
+                const rect = getFrameRect(i);
+                framesData[i] = {
+                    frame: {
+                        x: Math.round(rect.x),
+                        y: Math.round(rect.y),
+                        w: Math.round(rect.w),
+                        h: Math.round(rect.h)
+                    },
+                    spriteSourceSize: { x: 0, y: 0, w: Math.round(rect.w), h: Math.round(rect.h) },
+                    sourceSize: { w: Math.round(rect.w), h: Math.round(rect.h) }
+                };
+            }
+
+            const exportObj = {
+                meta: {
+                    image: fileNameForJSON,
+                    format: "RGBA8888",
+                    size: { w: img.width, h: img.height },
+                    scale: "1"
+                },
+                frames: framesData,
+                animations: customAnimations // Сохраняем все пользовательские пресеты
+            };
+
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportObj, null, 2));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            let outName = fileNameForJSON.split('.')[0] || "sprites";
+            downloadAnchorNode.setAttribute("download", outName + "_atlas.json");
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        }
+
+        window.onload = init;
+    </script>
+</body>
+
+</html>
